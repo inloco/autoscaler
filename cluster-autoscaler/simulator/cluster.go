@@ -156,7 +156,7 @@ func FindNodesToRemove(
 			continue
 		}
 
-		findProblems := findPlaceFor(nodeName, podsToRemove, destinationMap, clusterSnapshot,
+		findProblems := findPlaceFor(nodeInfo.Node(), podsToRemove, destinationMap, clusterSnapshot,
 			predicateChecker, oldHints, newHints, usageTracker, timestamp)
 		if findProblems == nil {
 			result = append(result, NodeToBeRemoved{
@@ -275,7 +275,7 @@ func calculateUtilizationOfResource(node *apiv1.Node, nodeInfo *schedulerframewo
 	return float64(podsRequest.MilliValue()) / float64(nodeAllocatable.MilliValue()-daemonSetAndMirrorPodsUtilization.MilliValue()), nil
 }
 
-func findPlaceFor(removedNode string, pods []*apiv1.Pod, nodes map[string]bool,
+func findPlaceFor(removedNode *apiv1.Node, pods []*apiv1.Pod, nodes map[string]bool,
 	clusterSnapshot ClusterSnapshot, predicateChecker PredicateChecker, oldHints map[string]string, newHints map[string]string, usageTracker *UsageTracker,
 	timestamp time.Time) error {
 
@@ -294,14 +294,14 @@ func findPlaceFor(removedNode string, pods []*apiv1.Pod, nodes map[string]bool,
 	}
 
 	isCandidateNode := func(nodeName string) bool {
-		return nodeName != removedNode && nodes[nodeName]
+		return nodeName != removedNode.Name && nodes[nodeName]
 	}
 
 	pods = tpu.ClearTPURequests(pods)
 
 	// remove pods from clusterSnapshot first
 	for _, pod := range pods {
-		if err := clusterSnapshot.RemovePod(pod.Namespace, pod.Name, removedNode); err != nil {
+		if err := clusterSnapshot.RemovePod(pod.Namespace, pod.Name, removedNode.Name); err != nil {
 			// just log error
 			klog.Errorf("Simulating removal of %s/%s return error; %v", pod.Namespace, pod.Name, err)
 		}
@@ -331,7 +331,7 @@ func findPlaceFor(removedNode string, pods []*apiv1.Pod, nodes map[string]bool,
 
 		if !foundPlace {
 			newNodeName, err := predicateChecker.FitsAnyNodeMatching(clusterSnapshot, pod, func(nodeInfo *schedulerframework.NodeInfo) bool {
-				return isCandidateNode(nodeInfo.Node().Name)
+				return isCandidateNode(nodeInfo.Node().Name) && isInSameTopologyZone(nodeInfo.Node(), removedNode)
 			})
 			if err == nil {
 				klog.V(4).Infof("Pod %s/%s can be moved to %s", pod.Namespace, pod.Name, newNodeName)
@@ -345,7 +345,11 @@ func findPlaceFor(removedNode string, pods []*apiv1.Pod, nodes map[string]bool,
 			}
 		}
 
-		usageTracker.RegisterUsage(removedNode, targetNode, timestamp)
+		usageTracker.RegisterUsage(removedNode.Name, targetNode, timestamp)
 	}
 	return nil
+}
+
+func isInSameTopologyZone(node *apiv1.Node, removedNode *apiv1.Node) bool {
+	return node.Labels[apiv1.LabelTopologyZone] == removedNode.Labels[apiv1.LabelTopologyZone]
 }
