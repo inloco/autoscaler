@@ -174,7 +174,7 @@ func (r *RemovalSimulator) CheckNodeRemoval(
 		return nil, &UnremovableNode{Node: nodeInfo.Node(), Reason: UnexpectedError}
 	}
 
-	err = r.findPlaceFor(nodeName, podsToRemove, destinationMap, oldHints, newHints, timestamp)
+	err = r.findPlaceFor(nodeInfo.Node(), podsToRemove, destinationMap, oldHints, newHints, timestamp)
 	if err != nil {
 		klog.V(2).Infof("node %s is not suitable for removal: %v", nodeName, err)
 		return nil, &UnremovableNode{Node: nodeInfo.Node(), Reason: NoPlaceToMovePods}
@@ -205,7 +205,7 @@ func (r *RemovalSimulator) FindEmptyNodesToRemove(candidates []string, timestamp
 	return result
 }
 
-func (r *RemovalSimulator) findPlaceFor(removedNode string, pods []*apiv1.Pod, nodes map[string]bool,
+func (r *RemovalSimulator) findPlaceFor(removedNode *apiv1.Node, pods []*apiv1.Pod, nodes map[string]bool,
 	oldHints map[string]string, newHints map[string]string, timestamp time.Time) error {
 
 	if err := r.clusterSnapshot.Fork(); err != nil {
@@ -223,14 +223,14 @@ func (r *RemovalSimulator) findPlaceFor(removedNode string, pods []*apiv1.Pod, n
 	}
 
 	isCandidateNode := func(nodeName string) bool {
-		return nodeName != removedNode && nodes[nodeName]
+		return nodeName != removedNode.Name && nodes[nodeName]
 	}
 
 	pods = tpu.ClearTPURequests(pods)
 
 	// remove pods from clusterSnapshot first
 	for _, pod := range pods {
-		if err := r.clusterSnapshot.RemovePod(pod.Namespace, pod.Name, removedNode); err != nil {
+		if err := r.clusterSnapshot.RemovePod(pod.Namespace, pod.Name, removedNode.Name); err != nil {
 			// just log error
 			klog.Errorf("Simulating removal of %s/%s return error; %v", pod.Namespace, pod.Name, err)
 		}
@@ -260,7 +260,7 @@ func (r *RemovalSimulator) findPlaceFor(removedNode string, pods []*apiv1.Pod, n
 
 		if !foundPlace {
 			newNodeName, err := r.predicateChecker.FitsAnyNodeMatching(r.clusterSnapshot, pod, func(nodeInfo *schedulerframework.NodeInfo) bool {
-				return isCandidateNode(nodeInfo.Node().Name)
+				return isCandidateNode(nodeInfo.Node().Name) && isInSameTopologyZone(nodeInfo.Node(), removedNode)
 			})
 			if err == nil {
 				klog.V(4).Infof("Pod %s/%s can be moved to %s", pod.Namespace, pod.Name, newNodeName)
@@ -274,7 +274,11 @@ func (r *RemovalSimulator) findPlaceFor(removedNode string, pods []*apiv1.Pod, n
 			}
 		}
 
-		r.usageTracker.RegisterUsage(removedNode, targetNode, timestamp)
+		r.usageTracker.RegisterUsage(removedNode.Name, targetNode, timestamp)
 	}
 	return nil
+}
+
+func isInSameTopologyZone(node *apiv1.Node, removedNode *apiv1.Node) bool {
+	return node.Labels[apiv1.LabelTopologyZone] == removedNode.Labels[apiv1.LabelTopologyZone]
 }

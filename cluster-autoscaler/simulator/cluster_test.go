@@ -39,6 +39,8 @@ func TestFindPlaceAllOk(t *testing.T) {
 	SetNodeReadyState(node1, true, time.Time{})
 	node2 := BuildTestNode("n2", 1000, 2000000)
 	SetNodeReadyState(node2, true, time.Time{})
+	removedNode := BuildTestNode("x", 1000, 2000000)
+	SetNodeReadyState(removedNode, true, time.Time{})
 
 	pod1 := BuildTestPod("p1", 300, 500000)
 	pod1.Spec.NodeName = "n1"
@@ -59,7 +61,7 @@ func TestFindPlaceAllOk(t *testing.T) {
 		[]*apiv1.Pod{pod1})
 
 	err = NewRemovalSimulator(nil, clusterSnapshot, predicateChecker, NewUsageTracker()).findPlaceFor(
-		"x",
+		removedNode,
 		[]*apiv1.Pod{new1, new2},
 		destinations,
 		oldHints, newHints, time.Now())
@@ -75,6 +77,8 @@ func TestFindPlaceAllBas(t *testing.T) {
 	SetNodeReadyState(node1, true, time.Time{})
 	node2 := BuildTestNode("n2", 1000, 2000000)
 	SetNodeReadyState(node2, true, time.Time{})
+	removedNode := BuildTestNode("x", 1000, 2000000)
+	SetNodeReadyState(removedNode, true, time.Time{})
 
 	pod1 := BuildTestPod("p1", 300, 500000)
 	pod1.Spec.NodeName = "n1"
@@ -97,7 +101,7 @@ func TestFindPlaceAllBas(t *testing.T) {
 		[]*apiv1.Pod{pod1})
 
 	err = NewRemovalSimulator(nil, clusterSnapshot, predicateChecker, NewUsageTracker()).findPlaceFor(
-		"nbad",
+		removedNode,
 		[]*apiv1.Pod{new1, new2, new3},
 		destinations,
 		oldHints, newHints, time.Now())
@@ -113,6 +117,8 @@ func TestFindNone(t *testing.T) {
 	SetNodeReadyState(node1, true, time.Time{})
 	node2 := BuildTestNode("n2", 1000, 2000000)
 	SetNodeReadyState(node2, true, time.Time{})
+	removedNode := BuildTestNode("x", 1000, 2000000)
+	SetNodeReadyState(removedNode, true, time.Time{})
 
 	pod1 := BuildTestPod("p1", 300, 500000)
 	pod1.Spec.NodeName = "n1"
@@ -130,7 +136,7 @@ func TestFindNone(t *testing.T) {
 		[]*apiv1.Pod{pod1})
 
 	err = NewRemovalSimulator(nil, clusterSnapshot, predicateChecker, NewUsageTracker()).findPlaceFor(
-		"x",
+		removedNode,
 		[]*apiv1.Pod{},
 		destinations,
 		make(map[string]string),
