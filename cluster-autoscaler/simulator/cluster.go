@@ -165,7 +165,7 @@ func (r *RemovalSimulator) SimulateNodeRemoval(
 	}
 
 	err = r.withForkedSnapshot(func() error {
-		return r.findPlaceFor(nodeName, podsToRemove, destinationMap, timestamp)
+		return r.findPlaceFor(nodeInfo.Node(), podsToRemove, destinationMap, timestamp)
 	})
 	if err != nil {
 		klog.V(2).Infof("node %s is not suitable for removal: %v", nodeName, err)
@@ -213,16 +213,16 @@ func (r *RemovalSimulator) withForkedSnapshot(f func() error) (err error) {
 	return err
 }
 
-func (r *RemovalSimulator) findPlaceFor(removedNode string, pods []*apiv1.Pod, nodes map[string]bool, timestamp time.Time) error {
+func (r *RemovalSimulator) findPlaceFor(removedNode *apiv1.Node, pods []*apiv1.Pod, nodes map[string]bool, timestamp time.Time) error {
 	isCandidateNode := func(nodeInfo *schedulerframework.NodeInfo) bool {
-		return nodeInfo.Node().Name != removedNode && nodes[nodeInfo.Node().Name]
+		return nodeInfo.Node().Name != removedNode.Name && nodes[nodeInfo.Node().Name] && isInSameTopologyZone(nodeInfo.Node(), removedNode)
 	}
 
 	pods = tpu.ClearTPURequests(pods)
 
 	// remove pods from clusterSnapshot first
 	for _, pod := range pods {
-		if err := r.clusterSnapshot.RemovePod(pod.Namespace, pod.Name, removedNode); err != nil {
+		if err := r.clusterSnapshot.RemovePod(pod.Namespace, pod.Name, removedNode.Name); err != nil {
 			// just log error
 			klog.Errorf("Simulating removal of %s/%s return error; %v", pod.Namespace, pod.Name, err)
 		}
@@ -244,7 +244,7 @@ func (r *RemovalSimulator) findPlaceFor(removedNode string, pods []*apiv1.Pod, n
 	}
 
 	for _, status := range statuses {
-		r.usageTracker.RegisterUsage(removedNode, status.NodeName, timestamp)
+		r.usageTracker.RegisterUsage(removedNode.Name, status.NodeName, timestamp)
 	}
 	return nil
 }
@@ -252,4 +252,8 @@ func (r *RemovalSimulator) findPlaceFor(removedNode string, pods []*apiv1.Pod, n
 // DropOldHints drops old scheduling hints.
 func (r *RemovalSimulator) DropOldHints() {
 	r.schedulingSimulator.DropOldHints()
+}
+
+func isInSameTopologyZone(node *apiv1.Node, removedNode *apiv1.Node) bool {
+	return node.Labels[apiv1.LabelTopologyZone] == removedNode.Labels[apiv1.LabelTopologyZone]
 }
