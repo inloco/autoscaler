@@ -52,7 +52,7 @@ require (
 	k8s.io/component-helpers v0.29.6
 	k8s.io/klog/v2 v2.110.1
 	k8s.io/kubelet v0.29.6
-	k8s.io/kubernetes v1.29.6
+	k8s.io/kubernetes v1.29.7
 	k8s.io/legacy-cloud-providers v0.0.0
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661
 	sigs.k8s.io/cloud-provider-azure v1.29.4
