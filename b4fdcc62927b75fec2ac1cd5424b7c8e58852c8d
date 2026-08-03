@@ -1,0 +1,23 @@
+{
+  "event": "security_override",
+  "timestamp": "2026-08-03T19:28:01.153452+00:00",
+  "user": "53412483+isabellabreder@users.noreply.github.com",
+  "branch": "cluster-autoscaler-1.36.1-incognia",
+  "files": [
+    "vertical-pod-autoscaler/charts/vertical-pod-autoscaler/README.md",
+    "vertical-pod-autoscaler/charts/vertical-pod-autoscaler/Chart.yaml",
+    "cluster-autoscaler/cloudprovider/kamatera/kamatera_cloud_config_test.go",
+    "vertical-pod-autoscaler/charts/vertical-pod-autoscaler/templates/admission-controller-tls-secret.yaml",
+    "cluster-autoscaler/cloudprovider/kamatera/examples/secret.yaml",
+    "cluster-autoscaler/charts/cluster-autoscaler/Chart.yaml",
+    "vertical-pod-autoscaler/docs/installation.md",
+    "cluster-autoscaler/cloudprovider/kamatera/kamatera_manager_test.go",
+    "cluster-autoscaler/cloudprovider/kamatera/kamatera_cloud_provider_test.go"
+  ],
+  "detectors": [
+    "Atera",
+    "Gitleaks: detect-kind-secret",
+    "Gitleaks: possible-raw-pii-email"
+  ],
+  "secrets_found": 111
+}
