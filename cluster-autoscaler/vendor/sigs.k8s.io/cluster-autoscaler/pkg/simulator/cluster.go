@@ -205,7 +205,7 @@ func (r *RemovalSimulator) SimulateNodeRemoval(
 	}
 
 	err = r.withForkedSnapshot(ctx, func() error {
-		return r.findPlaceFor(ctx, nodeName, podMoveInfo.Pods, destinationMap, timestamp)
+		return r.findPlaceFor(ctx, nodeInfo.Node(), podMoveInfo.Pods, destinationMap, timestamp)
 	})
 	if err != nil {
 		logger.V(2).Info("Node is not suitable for removal", "node", klog.KObj(nodeInfo.Node()), "err", err)
@@ -236,23 +236,23 @@ func (r *RemovalSimulator) withForkedSnapshot(ctx context.Context, f func() erro
 	return err
 }
 
-func (r *RemovalSimulator) findPlaceFor(ctx context.Context, removedNode string, pods []*apiv1.Pod, nodes map[string]bool, timestamp time.Time) error {
+func (r *RemovalSimulator) findPlaceFor(ctx context.Context, removedNode *apiv1.Node, pods []*apiv1.Pod, nodes map[string]bool, timestamp time.Time) error {
 	logger := klog.FromContext(ctx)
 	isCandidateNode := func(nodeInfo *framework.NodeInfo) bool {
-		return nodeInfo.Node().Name != removedNode && nodes[nodeInfo.Node().Name]
+		return nodeInfo.Node().Name != removedNode.Name && nodes[nodeInfo.Node().Name] && isInSameTopologyZone(nodeInfo.Node(), removedNode)
 	}
 
 	pods = tpu.ClearTPURequests(pods)
 
 	// Unschedule the pods from the Node in the snapshot first, so that they can be scheduled elsewhere by TrySchedulePods().
 	for _, pod := range pods {
-		if err := r.clusterSnapshot.UnschedulePod(pod.Namespace, pod.Name, removedNode); err != nil {
+		if err := r.clusterSnapshot.UnschedulePod(pod.Namespace, pod.Name, removedNode.Name); err != nil {
 			// just log error
 			logger.Error(err, "Simulating removal returned error", "namespace", pod.Namespace, "pod", klog.KObj(pod))
 		}
 	}
 
-	if err := r.replaceWithTaintedGhostNode(ctx, removedNode, timestamp); err != nil {
+	if err := r.replaceWithTaintedGhostNode(ctx, removedNode.Name, timestamp); err != nil {
 		return err
 	}
 
@@ -274,7 +274,7 @@ func (r *RemovalSimulator) findPlaceFor(ctx context.Context, removedNode string,
 	// After successful scheduling simulation, remove the tainted ghost node so that
 	// persisted snapshot state (used by subsequent simulations when canPersist=true)
 	// correctly reflects the node being gone.
-	return r.clusterSnapshot.RemoveNodeInfo(ctx, removedNode)
+	return r.clusterSnapshot.RemoveNodeInfo(ctx, removedNode.Name)
 }
 
 // replaceWithTaintedGhostNode replaces the given node in the snapshot with a
@@ -313,4 +313,8 @@ func (r *RemovalSimulator) replaceWithTaintedGhostNode(ctx context.Context, node
 // DropOldHints drops old scheduling hints.
 func (r *RemovalSimulator) DropOldHints() {
 	r.schedulingSimulator.DropOldHints()
+}
+
+func isInSameTopologyZone(node *apiv1.Node, removedNode *apiv1.Node) bool {
+	return node.Labels[apiv1.LabelTopologyZone] == removedNode.Labels[apiv1.LabelTopologyZone]
 }
